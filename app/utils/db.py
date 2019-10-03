@@ -168,8 +168,6 @@ def init_vm(vm_id, userid, available_resource):
         vcpus < available_resource['vcpus']
     ):
 
-        
-
         # Step 1:
         # Get total rsources used by this user
         # check if there is any resource limits set for this user first, if so
@@ -367,7 +365,10 @@ def delete_resources(vm_id):
 
     cur.execute(query)
     rows = cur.fetchall()
-    rows = rows[0]
+    if rows:
+        rows = rows[0]
+    else:
+        return None
     
     try:
         query = (

@@ -74,7 +74,7 @@ def create_user():
     """
 
     status_code = 200
-
+    result = {'success': True}
     if current_identity == 'user':
         result = {
             'success': False,
@@ -85,12 +85,22 @@ def create_user():
         userid = request.headers.get('userid')
         password = request.headers.get('password')
         type_ = request.headers.get('type')
-        result = db.create_user(userid, password, type_)
 
-        if 'already exists' in str(result):
-            result = {'success': True, 'message': 'User already exists'}
+        if not any(userid, password, type_):
+            message = (
+                'any of these(userid, password, type) values '
+                + ' shouln\'t be enpty'
+            )
+            result['message'] = message
         else:
-            result = {'success': True, 'message': 'User created Successfully'}
+            result = db.create_user(userid, password, type_)
+
+            if 'already exists' in str(result):
+                result = {
+                    'success': True, 'message': 'User already exists'}
+            else:
+                result = {
+                    'success': True, 'message': 'User created Successfully'}
 
     return result, status_code
 
@@ -133,8 +143,14 @@ def delete_user():
         status_code = 401
     else:
         userid = request.headers.get('userid')
-        message = db.delete_user(userid)
-        result = {'success': True, 'message': 'Deleted the user'}
+        if not userid:
+            result = {
+                'success': False,
+                'message': 'userid shouln\'t be empty'}
+        else:
+            message = db.delete_user(userid)
+            result = {'success': True, 'message': 'Deleted the user'}
+
     return result, status_code
 
 
@@ -147,10 +163,27 @@ def create_vm():
     """
     # Generate a unique ID for each VM
     _id = str(uuid.uuid1())
+    status_code = 200
 
     userid = request.headers.get('userid')
+    if not userid:
+        result = {
+            'success': True,
+            'message': 'userid shouldn\'t be empty'
+        }
+        return result, status_code
+    memory = request.headers.get('memory')
+    hdd = request.headers.get('hdd')
+    vcpus = request.headers.get('vcpus')
+    name = request.headers.get('name')
 
-    status_code = 200
+    if not all((memory.isdigit(), hdd.isdigit(), vcpus.isdigit())):
+        result = {
+            'success': True,
+            'message': 'memory, hdd, vcpus should be numeric'
+        }
+        return result, status_code
+
     # Validation for a normal user
     if (
         current_identity['type'] == 'user' 
@@ -161,14 +194,6 @@ def create_vm():
                 'message': 'You can\'t create VMs for other users'
             }
     else:
-        memory = request.headers.get('memory')
-        hdd = request.headers.get('hdd')
-        vcpus = request.headers.get('vcpus')
-        name = request.headers.get('name')
-
-        # TO-DO Add basic validations for all these entries like numberix, 
-        # range etc
-
         status = db.create_vm(name, userid, memory, hdd, vcpus, _id)
 
         print('Status from VM creation method', status)
@@ -252,7 +277,7 @@ def update_cache():
             'message': 'Only admin can use this API'
         }
     else:
-        
+        # No validation since it is an internal call 
         data = {
             'memory': request.headers.get('memory'),
             'hdd': request.headers.get('hdd'),
@@ -278,6 +303,16 @@ def init_vm():
     status_code = 200
     vm_id = request.headers.get('vm_id')
     userid = request.headers.get('userid')
+    if not any(userid, vm_id):
+        message = (
+            'any of these(userid, vm_id) values '
+            + ' shouln\'t be enpty'
+        )
+        result = {
+            'success': False,
+            'message': message
+        }
+        return result, status_code
 
     if current_identity['type'] == 'user':
         result = {
@@ -322,6 +357,20 @@ def set_resource_limit():
     hdd = request.headers.get('hdd')
     vcpus = request.headers.get('vcpus')
 
+    if not userid:
+        result = {
+            'success': True,
+            'message': 'userid shouldn\'t be empty'
+        }
+        return result, status_code
+
+    if not all((memory.isdigit(), hdd.isdigit(), vcpus.isdigit())):
+        result = {
+            'success': True,
+            'message': 'memory, hdd, vcpus should be numeric'
+        }
+        return result, status_code
+
     if current_identity['type'] == 'user':
         result = {
             'success': False,
@@ -347,6 +396,14 @@ def list_resources():
     """
     userid = current_identity['userid']
     user_type = current_identity['type']
+    status_code = 200
+
+    if not all(userid, user_type):
+        result = {
+            'success': True,
+            'message': 'userid,user_type shouldn\'t be empty'
+        }
+        return result, status_code
 
     _all = False
     if user_type == 'admin':
@@ -359,7 +416,7 @@ def list_resources():
         'resources': resources
     }
 
-    return result, 200
+    return result, status_code
 
 
 @app.route('/delete_resources', methods = ['POST'])
@@ -378,8 +435,16 @@ def delete_resources():
     userid = request.headers.get('userid')
     vm_id = request.headers.get('vm_id')
 
-    result = {'success': True}
     status_code = 200
+    if not all(userid, vm_id):
+        result = {
+            'success': True,
+            'message': 'userid, vm_id shouldn\'t be empty'
+        }
+        return result, status_code
+
+    result = {'success': True}
+
     if user_type == 'user' and userid != current_userid:
         print('User ID from token and args ', userid, current_userid)
         result['message'] = 'you cannot delete other user\'s resources'
@@ -391,16 +456,20 @@ def delete_resources():
             vm_id
         )
 
-        # update the Cache
-        current_cache_details = cache.available_resource()
-        new_cache_details = {
-            'memory': (
-                current_cache_details['memory'] + int(d_resource_details[1])),
-            'hdd': (current_cache_details['hdd'] + int(d_resource_details[2])),
-            'vcpus': (
-                current_cache_details['hdd'] + int(d_resource_details[3]))
-        }
-        cache.update_cache(new_cache_details)
+        if d_resource_details:
+            # update the Cache
+            current_cache_details = cache.available_resource()
+            new_cache_details = {
+                'memory': (
+                    current_cache_details['memory'] 
+                    + int(d_resource_details[1])),
+                'hdd': (
+                    current_cache_details['hdd'] 
+                    + int(d_resource_details[2])),
+                'vcpus': (
+                    current_cache_details['hdd'] + int(d_resource_details[3]))
+            }
+            cache.update_cache(new_cache_details)
     
     return result, status_code
 

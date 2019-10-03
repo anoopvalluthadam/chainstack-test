@@ -16,25 +16,39 @@ async def sync_cache(client, session, host):
         "Content-Type": "application/json"
     }
     data = json.dumps(data)
-    async with session.post(url, data=data, headers=headers) as response:
-        access_token = await response.json()
-        access_token = access_token.get('access_token', None)
+
+    try:
+        async with session.post(url, data=data, headers=headers) as response:
+            access_token = await response.json()
+            access_token = access_token.get('access_token', None)
+    except Exception as error:
+        print('Error in auth: ', error)
+        exit(1)
         
     # get from persistant storage
     url = host + 'get_used_resources'
     headers = {
         "Authorization": "JWT {}".format(access_token)
     }
-    used_resources = {}
-    async with session.get(url, headers=headers) as response:
-        used_resources = await response.json()
-        used_resources = used_resources.get('used_resources', {})
 
-    total_resources = {}
-    url = host + 'get_init_resources'
-    async with session.get(url, headers=headers) as response:
-        total_resources = await response.json()
-        total_resources = total_resources.get('total_resources', {})
+    try:
+        used_resources = {}
+        async with session.get(url, headers=headers) as response:
+            used_resources = await response.json()
+            used_resources = used_resources.get('used_resources', {})
+    except Exception as error:
+        print('Error in get_used_resources: ', error)
+        exit(1)
+
+    try:
+        total_resources = {}
+        url = host + 'get_init_resources'
+        async with session.get(url, headers=headers) as response:
+            total_resources = await response.json()
+            total_resources = total_resources.get('total_resources', {})
+    except Exception as error:
+        print('Error in get_init_resources: ', error)
+        exit(1)
 
     available = {
         'memory': total_resources['memory'] - used_resources['memory'],
@@ -51,9 +65,14 @@ async def sync_cache(client, session, host):
     }
     url = host + 'update_cache'
     used_resources = {}
-    async with session.post(url, headers=headers) as response:
-        result = await response.read()
-        print(result)
+
+    try:
+        async with session.post(url, headers=headers) as response:
+            result = await response.read()
+            print(result)
+    except Exception as error:
+        print('Error in update_cache: ', error)
+        exit(1)
 
 
 
