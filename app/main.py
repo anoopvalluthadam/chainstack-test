@@ -20,39 +20,58 @@ class User(object):
     def __str__(self):
         return "User(id='%s')" % self.id
 
+
 def authenticate(username, password):
+    """
+    AUthenticate and generate Token
+    """
     con = db.get_connection()
     user = db.get_user_details(username, password, con)
 
     
-    if user and safe_str_cmp(user[1].encode('utf-8'), password.encode('utf-8')):
+    if (
+        user and
+        safe_str_cmp(user[1].encode('utf-8'), password.encode('utf-8'))
+    ):
 
+        # This will be used everywhere for authentication and role checking
         current_user = {
             'userid': user[0],
             'type': user[2]
         }
+
         user = User(current_user, user[0], user[1])
         return user
 
 def identity(payload):
+    """
+    Getting the identity for the current user
+    """
     user_id = payload['identity']
-    print(user_id)
     return user_id
 
+# Usual Flask stuff
 app = Flask(__name__)
 app.debug = True
 app.config['SECRET_KEY'] = 'super-secret'
 
 jwt = JWT(app, authenticate, identity)
 
+
 @app.route('/health')
 def health():
+    """
+    Health check API for the service
+    """
     return 'I am working fine...'
 
 
 @app.route('/create_user', methods = ['POST'])
 @jwt_required()
 def create_user():
+    """
+    User creation, olny for admins
+    """
 
     status_code = 200
 
@@ -67,17 +86,21 @@ def create_user():
         password = request.headers.get('password')
         type_ = request.headers.get('type')
         result = db.create_user(userid, password, type_)
+
         if 'already exists' in str(result):
             result = {'success': True, 'message': 'User already exists'}
         else:
             result = {'success': True, 'message': 'User created Successfully'}
+
     return result, status_code
 
 
 @app.route('/list_users', methods = ['GET'])
 @jwt_required()
 def list_users():
-
+    """
+    List all the users in the system, only for admins
+    """
     status_code = 200
 
     if current_identity['type'] == 'user':
@@ -89,13 +112,16 @@ def list_users():
     else:
         users = db.list_users()
         result = {'success': True, 'users': users}
+
     return result, status_code
 
 
 @app.route('/delete_user', methods = ['DELETE'])
 @jwt_required()
 def delete_user():
-
+    """
+    Delete user permanently, only admins can perform this operation
+    """
     # TO-DO: Check for the current user deletion - do not allow
     status_code = 200
 
@@ -115,10 +141,15 @@ def delete_user():
 @app.route('/create_vm', methods = ['POST'])
 @jwt_required()
 def create_vm():
-
+    """
+    Create a VM - which will make the entry in the DB and the Queue
+    another service will get the ID from the queue and process the VM for 
+    """
+    # Generate a unique ID for each VM
     _id = str(uuid.uuid1())
+
     userid = request.headers.get('userid')
-    # TO-DO: Check for the current user deletion - do not allow
+
     status_code = 200
     # Validation for a normal user
     if (
@@ -135,7 +166,8 @@ def create_vm():
         vcpus = request.headers.get('vcpus')
         name = request.headers.get('name')
 
-        # TO-DO Add basic validations for all these entries
+        # TO-DO Add basic validations for all these entries like numberix, 
+        # range etc
 
         status = db.create_vm(name, userid, memory, hdd, vcpus, _id)
 
@@ -146,20 +178,22 @@ def create_vm():
             # process the VM creation
 
             client = cache.create_redis_client()
-            result = cache.insert(_id, client)
-            print(result)
-
-
+            result = cache.insert(_id + ':' + userid , client)
+            print('Updated the queue successfully...')
             result = {'success': True, 'message': 'VM creation in progress'}
         else:
             result = {'success': False, 'message': 'Something went wrong!'}
 
     return result, status_code
 
+
 @app.route('/get_used_resources', methods = ['GET'])
 @jwt_required()
 def get_used_resources():
-
+    """
+    Get Used resources so that we can understand what is the current
+    system load, it is used mainly internal services
+    """
     status_code = 200
     if current_identity['type'] == 'user':
         result = {
@@ -178,10 +212,14 @@ def get_used_resources():
 
     return result, status_code
 
+
 @app.route('/get_init_resources', methods = ['GET'])
 @jwt_required()
 def get_init_resources():
-
+    """
+    This is to get Node/cluster resource, how much is the total resouce
+    available, mainly for internal use
+    """
     status_code = 200
     if current_identity['type'] == 'user':
         result = {
@@ -200,10 +238,13 @@ def get_init_resources():
 
     return result, status_code
 
+
 @app.route('/update_cache', methods = ['POST'])
 @jwt_required()
 def update_cache():
-
+    """
+    This API is for updating the cache DB, only for internal use
+    """
     status_code = 200
     if current_identity['type'] == 'user':
         result = {
@@ -227,10 +268,17 @@ def update_cache():
 @app.route('/init_vm', methods = ['POST'])
 @jwt_required()
 def init_vm():
+    """
+    Actual initialization of the VM is happening here
+    Called by the service, with VM ID
+    This will update start the VM, update the DBs and caches
+    Onyl available for internal use, or admin use
+    """
 
     status_code = 200
     vm_id = request.headers.get('vm_id')
     userid = request.headers.get('userid')
+
     if current_identity['type'] == 'user':
         result = {
             'success': False,
@@ -238,8 +286,12 @@ def init_vm():
         }
     else:
         available_resource = cache.available_resource()
-        print(available_resource)
+        print('Available resouce: ', available_resource)
+
         remaining_resource = db.init_vm(vm_id, userid, available_resource)
+        print('remaining_resource: ', remaining_resource)
+
+        # Update the cache with remaining resources if everything went fine
         if remaining_resource['message'] == 'success':
             # update the cache
             cache.update_cache(remaining_resource)
@@ -259,12 +311,17 @@ def init_vm():
 @app.route('/set_resource_limit', methods = ['POST'])
 @jwt_required()
 def set_resource_limit():
+    """
+    This API is for Admins to set resource limits for the users, for a user
+    if resource limit is not set, then they can use unlimited resources
+    """
 
     status_code = 200
     userid = request.headers.get('userid')
     memory = request.headers.get('memory')
     hdd = request.headers.get('hdd')
     vcpus = request.headers.get('vcpus')
+
     if current_identity['type'] == 'user':
         result = {
             'success': False,
@@ -280,10 +337,14 @@ def set_resource_limit():
     return result, status_code
 
 
-
 @app.route('/list_resources', methods = ['POST'])
 @jwt_required()
 def list_resources():
+    """
+    List created VMs and its details, both admin and user can use this API
+    For admins, can list all the VMS
+    For users, only the user created VMs
+    """
     userid = current_identity['userid']
     user_type = current_identity['type']
 
@@ -300,9 +361,17 @@ def list_resources():
 
     return result, 200
 
+
 @app.route('/delete_resources', methods = ['POST'])
 @jwt_required()
 def delete_resources():
+    """
+    Delete the resource
+    Admin can delete any resource and user can delete only the one which user
+    created
+    Once delete the VM make sure the cache got updated with the latest resource
+    details
+    """
     current_userid = current_identity['userid']
     user_type = current_identity['type']
 
@@ -312,13 +381,17 @@ def delete_resources():
     result = {'success': True}
     status_code = 200
     if user_type == 'user' and userid != current_userid:
+        print('User ID from token and args ', userid, current_userid)
         result['message'] = 'you cannot delete other user\'s resources'
 
     else:
+        # Do the deletion
         d_resource_details = db.delete_resources(vm_id)
         result['message'] = 'Successfully deleted the resource {}'.format(
             vm_id
         )
+
+        # update the Cache
         current_cache_details = cache.available_resource()
         new_cache_details = {
             'memory': (

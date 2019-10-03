@@ -8,6 +8,7 @@ def get_connection():
 
     return connection
 
+
 def get_user_details(userid, password, con):
     cur = con.cursor()
 
@@ -112,12 +113,16 @@ def get_used_resources():
 
     query = (
         "SELECT SUM(memory), SUM(hdd), SUM(vcpus) from resource_allocation"
+        + " where status='running'"
     )
 
     cur.execute(query)
     rows = cur.fetchall()
     if rows:
-        return rows[0]
+        rows = rows[0]
+        if not any(rows):
+            rows = (0, 0, 0)
+        return rows
     else:
         return [(0, 0, 0)]
 
@@ -129,7 +134,7 @@ def init_vm(vm_id, userid, available_resource):
     query = (
         "SELECT * from resource_allocation where id='{}'".format(vm_id)
     )
-
+    print(query)
     cur.execute(query)
     rows = cur.fetchall()[0]
     
@@ -175,6 +180,7 @@ def init_vm(vm_id, userid, available_resource):
             + " from resource_allocation"
             + " WHERE userid='{}' AND status='running'".format(userid)
         )
+        print(query)
 
         cur.execute(query)
         total_resouces_used = cur.fetchall()
@@ -182,6 +188,7 @@ def init_vm(vm_id, userid, available_resource):
             total_resouces_used = [(0, 0, 0)]
         else:
             total_resouces_used = total_resouces_used[0]
+            print('------> ', total_resouces_used)
             if not any(total_resouces_used):
                 total_resouces_used = (0, 0, 0)
 
@@ -194,8 +201,9 @@ def init_vm(vm_id, userid, available_resource):
         cur.execute(query)
         resource_limits_details = cur.fetchall()
 
-
+        print('Current status about the quota...')
         print(total_resouces_used, resource_limits_details)
+        print('-' * 20)
 
         # Step 3:
         # Validation for resource limit:
@@ -207,27 +215,39 @@ def init_vm(vm_id, userid, available_resource):
             new_vcpus = total_resouces_used[2] + int(vm_details['vcpus'])
 
             resource_limit_condition = (
-                new_memory < resource_limits_details[0] and
-                new_hdd < resource_limits_details[1] and
-                new_vcpus < resource_limits_details[2]
+                new_memory <= resource_limits_details[0] and
+                new_hdd <= resource_limits_details[1] and
+                new_vcpus <= resource_limits_details[2]
             )
 
             if not resource_limit_condition:
+                try:
+                    # Add a validation for not update if it is running
+                    query = (
+                        "UPDATE  resource_allocation "
+                        + " SET comment='{}'".format(
+                            'resource limit reached for the user')
+                        + " WHERE id='{}'".format(vm_id)
+                    )
+                    cur.execute(query)
+                    con.commit()
+                except Exception as error:
+                    print('Error while initialising the VM: ', error)
+                    return {'message': 'Error in the VM init, contact admin'}
                 return {'message': 'Resource limit reached'}
-
-       
 
         try:
             # Add a validation for not update if it is running
             query = (
-                "UPDATE  resource_allocation SET status='running'"
+                "UPDATE  resource_allocation SET status='running',"
+                + " comment='running'"
                 + " WHERE id='{}'".format(vm_id)
             )
             cur.execute(query)
             con.commit()
         except Exception as error:
             print('Error while initialising the VM: ', error)
-            return None
+            return {'message': 'Error in the VM init, contact admin'}
 
         memory = available_resource['memory'] - memory
         hdd = available_resource['hdd'] - hdd
@@ -239,6 +259,34 @@ def init_vm(vm_id, userid, available_resource):
             'vcpus': vcpus,
             'message': 'success'
         }
+    else:
+        try:
+            # Add a validation for not update if it is running
+            query = (
+                "UPDATE  resource_allocation "
+                + " SET comment='{}'".format(
+                    'resource limit reached in the Node / Cluster')
+                + " WHERE id='{}'".format(vm_id)
+            )
+            cur.execute(query)
+            con.commit()
+        except Exception as error:
+            print('Error while initialising the VM: ', error)
+            return {'message': 'Error in the VM init, contact admin'}
+        return {'message': 'Resource limit reached in the Node, contact admin'}
+
+def get_init_resources():
+    con = get_connection()
+    cur = con.cursor()
+
+    query = (
+        "SELECT * from resources"
+    )
+    cur.execute(query)
+    total_resources = cur.fetchall()
+    total_resources = total_resources[0]
+
+    return total_resources
 
 
 def set_resource_limits(userid, memory, hdd, vcpus):
@@ -302,7 +350,8 @@ def list_resources(userid, _all):
                 'vcpus': int(res[3]),
                 'state': res[4],
                 'name': res[5],
-                'id': res[6]
+                'id': res[6],
+                'comment': res[7]
             }
         )
 

@@ -64,18 +64,37 @@ async def get_client():
 async def get(client):
     return await client.lpop('vm_queue')
 
-async def fetch(url, vm_id, session):
-    async with session.get(url) as response:
-        delay = response.headers.get("DELAY")
-        date = response.headers.get("DATE")
-        print("{}:{} with delay {}".format(date, response.url, delay))
-        return await response.read()
+async def fetch(host, vm_id, userid, session):
+    access_token = None
+    url = host + 'auth'
+    data = {
+        "username": "anoop@gmail.com",
+        "password": "1234"
+    }
+    headers = {
+        "Content-Type": "application/json"
+    }
+    data = json.dumps(data)
+    async with session.post(url, data=data, headers=headers) as response:
+        access_token = await response.json()
+        access_token = access_token.get('access_token', None)
+
+    url = host + 'init_vm'
+    headers = {
+        "Authorization": "JWT {}".format(access_token),
+        'vm_id': vm_id,
+        'userid': userid
+    }
+    print(headers)
+    async with session.post(url, headers=headers) as response:
+       result = await response.json()
+       print(result)
 
 
-async def bound_fetch(sem, vm_id, url, session):
+async def bound_fetch(sem, vm_id, url, userid, session):
     # Getter function with semaphore.
     async with sem:
-        await fetch(url, vm_id, session)
+        await fetch(url, vm_id, userid, session)
 
 
 async def run(r):
@@ -87,9 +106,13 @@ async def run(r):
 
     async with ClientSession() as session:
         client = await get_client()
-        await sync_cache(client, session, url)
 
         while True:
+
+            # A demo of syncing the cache, not the actual location to sync, 
+            # but just a demo for we have to sync persistant with cache
+            await sync_cache(client, session, url)
+
             vm_id = await get(client)
             tasks = []
             print(vm_id)
@@ -97,9 +120,11 @@ async def run(r):
                 print('Gonna take a nap...')
                 await asyncio.sleep(2)
             else:
+                vm_id = vm_id.decode('ascii')
                 print('Have something in the queue ', vm_id)
+                vm_id, userid = vm_id.split(':')
                 task = asyncio.ensure_future(
-                    bound_fetch(sem, vm_id, url, session)
+                    bound_fetch(sem, vm_id, url, userid, session)
                 )
                 tasks.append(task)
 
