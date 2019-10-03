@@ -122,7 +122,7 @@ def get_used_resources():
         return [(0, 0, 0)]
 
 
-def init_vm(vm_id, available_resource):
+def init_vm(vm_id, userid, available_resource):
     con = get_connection()
     cur = con.cursor()
 
@@ -136,12 +136,87 @@ def init_vm(vm_id, available_resource):
     memory = int(rows[1])
     hdd = int(rows[2])
     vcpus = int(rows[3])
-    
+
+    # TO-DO: Souldn't not allow a user to start a VM which is already started
+    # Very important validation
+    # Setp 0: get the VM details which user is gonna start:
+    query = (
+        "SELECT * from resource_allocation"
+        + " WHERE id='{}'".format(vm_id)
+    )
+    cur.execute(query)
+    vm_details = cur.fetchall()
+    vm_details = vm_details[0]
+    vm_details = {
+        'memory': vm_details[1],
+        'hdd': vm_details[2],
+        'vcpus': vm_details[3],
+        'status': vm_details[4]
+    }
+    if vm_details['status'] == 'running':
+        return {'message': 'already running'}
+
+
     if (
         memory < available_resource['memory'] and 
         hdd < available_resource['hdd'] and
         vcpus < available_resource['vcpus']
     ):
+
+        
+
+        # Step 1:
+        # Get total rsources used by this user
+        # check if there is any resource limits set for this user first, if so
+        # do a validation for that first
+        # 
+        query = (
+            "SELECT SUM(memory), SUM(hdd), SUM(vcpus)"
+            + " from resource_allocation"
+            + " WHERE userid='{}' AND status='running'".format(userid)
+        )
+
+        cur.execute(query)
+        total_resouces_used = cur.fetchall()
+        if not total_resouces_used:
+            total_resouces_used = [(0, 0, 0)]
+        else:
+            total_resouces_used = total_resouces_used[0]
+            if not any(total_resouces_used):
+                total_resouces_used = (0, 0, 0)
+
+        # Step 2:
+        # Get resource allocated for this user, if there is any! 
+        query = (
+            "SELECT memory, hdd, vcpus from resource_limits"
+            + " WHERE userid='{}'".format(userid)
+        )
+        cur.execute(query)
+        resource_limits_details = cur.fetchall()
+
+
+        print(total_resouces_used, resource_limits_details)
+
+        # Step 3:
+        # Validation for resource limit:
+        if resource_limits_details:
+            resource_limits_details = resource_limits_details[0]
+            # Find the total resouces if we start the new VM
+            new_memory = total_resouces_used[0] + int(vm_details['memory'])
+            new_hdd = total_resouces_used[1] + int(vm_details['hdd'])
+            new_vcpus = total_resouces_used[2] + int(vm_details['vcpus'])
+
+            resource_limit_condition = (
+                new_memory < resource_limits_details[0] and
+                new_hdd < resource_limits_details[1] and
+                new_vcpus < resource_limits_details[2]
+            )
+
+            if not resource_limit_condition:
+                return {'message': 'Resource limit reached'}
+
+       
+
         try:
             # Add a validation for not update if it is running
             query = (
@@ -161,7 +236,8 @@ def init_vm(vm_id, available_resource):
         return {
             'memory': memory,
             'hdd': hdd,
-            'vcpus': vcpus
+            'vcpus': vcpus,
+            'message': 'success'
         }
 
 

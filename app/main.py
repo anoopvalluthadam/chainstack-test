@@ -230,6 +230,7 @@ def init_vm():
 
     status_code = 200
     vm_id = request.headers.get('vm_id')
+    userid = request.headers.get('userid')
     if current_identity['type'] == 'user':
         result = {
             'success': False,
@@ -238,12 +239,21 @@ def init_vm():
     else:
         available_resource = cache.available_resource()
         print(available_resource)
-        remaining_resource = db.init_vm(vm_id, available_resource)
+        remaining_resource = db.init_vm(vm_id, userid, available_resource)
+        if remaining_resource['message'] == 'success':
+            # update the cache
+            cache.update_cache(remaining_resource)
+            result = {
+                'success': True,
+                'message': 'Successfully started the VM'
+            }
+        else:
+            result = {
+                'success': False,
+                'message': remaining_resource['message']
+            }
 
-        # update the cache
-        cache.update_cache(remaining_resource)
-
-    return remaining_resource, status_code
+    return result, status_code
 
 
 @app.route('/set_resource_limit', methods = ['POST'])
