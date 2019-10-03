@@ -274,7 +274,63 @@ def set_resource_limits(userid, memory, hdd, vcpus):
         con.close()
         return error
 
+def list_resources(userid, _all):
+    
+    con = get_connection()
+    cur = con.cursor()
 
+    if _all:
+        query = (
+           "SELECT * FROM resource_allocation"
+        )
+    else:
+        query = (
+           "SELECT * FROM resource_allocation WHERE userid='{}'".format(
+               userid
+           )
+        )
+    cur.execute(query)
+    resources_allocation_details = cur.fetchall()
+
+    result = []
+    for res in resources_allocation_details:
+        result.append(
+            {
+                'userid': res[0],
+                'memory': int(res[1]),
+                'hdd': int(res[2]),
+                'vcpus': int(res[3]),
+                'state': res[4],
+                'name': res[5],
+                'id': res[6]
+            }
+        )
+
+    return result
+    
+def delete_resources(vm_id):
+    con = get_connection()
+    cur = con.cursor()
+
+    query = (
+        "SELECT * from resource_allocation where id='{}'".format(vm_id)
+    )
+
+    cur.execute(query)
+    rows = cur.fetchall()
+    rows = rows[0]
+    
+    try:
+        query = (
+            "DELETE from resource_allocation where id='{}'".format(vm_id)
+        )
+        cur.execute(query)
+        con.commit()
+    except Exception as error:
+        print('Error while deletion of a user: ', error)
+        return None
+
+    return rows
     
 
 if __name__ == '__main__':
@@ -289,4 +345,4 @@ if __name__ == '__main__':
 
     # print(get_init_resources('aafcb764-e507-11e9-aa0b-acde48001122'))
     # set_resource_limits('userid', 1200, 120, 5)
-    
+    print(list_resources('user1@gmail.com', True))

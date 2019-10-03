@@ -281,6 +281,56 @@ def set_resource_limit():
 
 
 
+@app.route('/list_resources', methods = ['POST'])
+@jwt_required()
+def list_resources():
+    userid = current_identity['userid']
+    user_type = current_identity['type']
+
+    _all = False
+    if user_type == 'admin':
+        _all = request.headers.get('all')
+        
+    resources = db.list_resources(userid, _all)
+
+    result = {
+        'success': True,
+        'resources': resources
+    }
+
+    return result, 200
+
+@app.route('/delete_resources', methods = ['POST'])
+@jwt_required()
+def delete_resources():
+    current_userid = current_identity['userid']
+    user_type = current_identity['type']
+
+    userid = request.headers.get('userid')
+    vm_id = request.headers.get('vm_id')
+
+    result = {'success': True}
+    status_code = 200
+    if user_type == 'user' and userid != current_userid:
+        result['message'] = 'you cannot delete other user\'s resources'
+
+    else:
+        d_resource_details = db.delete_resources(vm_id)
+        result['message'] = 'Successfully deleted the resource {}'.format(
+            vm_id
+        )
+        current_cache_details = cache.available_resource()
+        new_cache_details = {
+            'memory': (
+                current_cache_details['memory'] + int(d_resource_details[1])),
+            'hdd': (current_cache_details['hdd'] + int(d_resource_details[2])),
+            'vcpus': (
+                current_cache_details['hdd'] + int(d_resource_details[3]))
+        }
+        cache.update_cache(new_cache_details)
+    
+    return result, status_code
+
 
 if __name__ == '__main__':
     app.run()
