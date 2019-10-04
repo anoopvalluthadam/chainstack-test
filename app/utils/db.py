@@ -78,6 +78,17 @@ def delete_user(userid):
 
     try:
         query = (
+            "DELETE from resource_allocation where userid='{}'".format(userid)
+        )
+        cur.execute(query)
+        con.commit()
+    except Exception as error:
+        print('Error while deletion of a user in removin resources: ',
+              error)
+        return None
+
+    try:
+        query = (
             "DELETE from USERS where userid='{}'".format(userid)
         )
         cur.execute(query)

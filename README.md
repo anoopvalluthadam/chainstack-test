@@ -33,3 +33,6 @@ Architecture
         |                                                          |
         +----------------------------------------------------------+
 ```
+
+API Documentation: 
+https://documenter.getpostman.com/view/3471667/SVtR1VZe?version=latest
