@@ -404,7 +404,7 @@ def list_resources():
     user_type = current_identity['type']
     status_code = 200
 
-    if not all(userid, user_type):
+    if not all((userid, user_type)):
         result = {
             'success': True,
             'message': 'userid,user_type shouldn\'t be empty'
