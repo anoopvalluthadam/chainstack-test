@@ -86,21 +86,27 @@ def create_user():
         password = request.headers.get('password')
         type_ = request.headers.get('type')
 
-        if not any((userid, password, type_)):
+        if not all((userid, password, type_)):
             message = (
                 'any of these(userid, password, type) values '
                 + ' shouln\'t be enpty'
             )
             result['message'] = message
         else:
-            result = db.create_user(userid, password, type_)
-
-            if 'already exists' in str(result):
+            if type_ not in ('user', 'admin'):
+                msg = 'we are not aware of this user type'
                 result = {
-                    'success': True, 'message': 'User already exists'}
+                    'success': True, 'message': msg}
             else:
-                result = {
-                    'success': True, 'message': 'User created Successfully'}
+                result = db.create_user(userid, password, type_)
+
+                if 'already exists' in str(result):
+                    result = {
+                        'success': True, 'message': 'User already exists'}
+                else:
+                    result = {
+                        'success': True,
+                        'message': 'User created Successfully'}
 
     return result, status_code
 
@@ -309,7 +315,7 @@ def init_vm():
     status_code = 200
     vm_id = request.headers.get('vm_id')
     userid = request.headers.get('userid')
-    if not any((userid, vm_id)):
+    if not all((userid, vm_id)):
         message = (
             'any of these(userid, vm_id) values '
             + ' shouln\'t be enpty'
@@ -442,7 +448,7 @@ def delete_resources():
     vm_id = request.headers.get('vm_id')
 
     status_code = 200
-    if not all(userid, vm_id):
+    if not all((userid, vm_id)):
         result = {
             'success': True,
             'message': 'userid, vm_id shouldn\'t be empty'
