@@ -24,7 +24,7 @@ async def sync_cache(client, session, host):
             access_token = access_token.get('access_token', None)
     except Exception as error:
         print('Error in auth: ', error)
-        exit(1)
+        raise Exception(error)
         
     # get from persistant storage
     url = host + 'get_used_resources'
@@ -39,7 +39,7 @@ async def sync_cache(client, session, host):
             used_resources = used_resources.get('used_resources', {})
     except Exception as error:
         print('Error in get_used_resources: ', error)
-        exit(1)
+        raise Exception(error)
 
     try:
         total_resources = {}
@@ -49,7 +49,7 @@ async def sync_cache(client, session, host):
             total_resources = total_resources.get('total_resources', {})
     except Exception as error:
         print('Error in get_init_resources: ', error)
-        exit(1)
+        raise Exception(error)
 
     available = {
         'memory': total_resources['memory'] - used_resources['memory'],
@@ -73,7 +73,7 @@ async def sync_cache(client, session, host):
             print(result)
     except Exception as error:
         print('Error in update_cache: ', error)
-        exit(1)
+        raise Exception(error)
 
 
 
@@ -129,9 +129,23 @@ async def run(r):
 
         while True:
 
-            # A demo of syncing the cache, not the actual location to sync, 
-            # but just a demo for we have to sync persistant with cache
-            await sync_cache(client, session, url)
+            # just a retry mechanism, can add a decorator instead of this
+            for retry_count in range(5):
+                try:
+                    # A demo of syncing the cache, not the actual location to 
+                    # sync, 
+                    # but just a demo for we have to sync persistant with cache
+                    await sync_cache(client, session, url)
+                    break
+                except Exception as error:
+                    if 'Cannot connect to host' in str(error):
+                        print('Looks like API server is down...')
+                        print('Retry {} in another 20 sec...'.format(
+                            retry_count))
+                        await asyncio.sleep(20)
+                        continue
+                    else:
+                        exit(1)
 
             vm_id = await get(client)
             tasks = []
