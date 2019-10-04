@@ -86,7 +86,7 @@ def create_user():
         password = request.headers.get('password')
         type_ = request.headers.get('type')
 
-        if not any(userid, password, type_):
+        if not any((userid, password, type_)):
             message = (
                 'any of these(userid, password, type) values '
                 + ' shouln\'t be enpty'
@@ -303,7 +303,7 @@ def init_vm():
     status_code = 200
     vm_id = request.headers.get('vm_id')
     userid = request.headers.get('userid')
-    if not any(userid, vm_id):
+    if not any((userid, vm_id)):
         message = (
             'any of these(userid, vm_id) values '
             + ' shouln\'t be enpty'
