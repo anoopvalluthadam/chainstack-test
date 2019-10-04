@@ -369,7 +369,7 @@ def set_resource_limit():
     hdd = request.headers.get('hdd')
     vcpus = request.headers.get('vcpus')
 
-    if not all(memory, hdd, vcpus):
+    if not all((memory, hdd, vcpus)):
         result = {
             'success': False,
             'message': 'memory, hdd, vcpus shouldn\'t be empty'
