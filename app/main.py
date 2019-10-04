@@ -176,6 +176,12 @@ def create_vm():
     hdd = request.headers.get('hdd')
     vcpus = request.headers.get('vcpus')
     name = request.headers.get('name')
+    if not all((memory, hdd, vcpus, name)):
+        result = {
+            'success': True,
+            'message': 'memory, hdd, vcpus, name shouldn\'t be empty'
+        }
+        return result, status_code
 
     if not all((memory.isdigit(), hdd.isdigit(), vcpus.isdigit())):
         result = {
