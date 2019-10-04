@@ -1,6 +1,7 @@
 import random
 import asyncio
 import json
+import os
 import aioredis
 from aiohttp import ClientSession
 
@@ -9,8 +10,8 @@ async def sync_cache(client, session, host):
     access_token = None
     url = host + 'auth'
     data = {
-        "username": "anoop@gmail.com",
-        "password": "1234"
+        "username": os.environ['ADMIN_USER'],
+        "password": os.environ['ADMIN_PASSWORD']
     }
     headers = {
         "Content-Type": "application/json"
@@ -87,8 +88,8 @@ async def fetch(host, vm_id, userid, session):
     access_token = None
     url = host + 'auth'
     data = {
-        "username": "anoop@gmail.com",
-        "password": "1234"
+        "username": os.environ['ADMIN_USER'],
+        "password": os.environ['ADMIN_PASSWORD']
     }
     headers = {
         "Content-Type": "application/json"
