@@ -37,6 +37,10 @@ Architecture
 # API Documentation: 
 https://documenter.getpostman.com/view/3471667/SVtR1VZe?version=latest
 
+Please use the API documentation to access the APIs, The App is deployed in 
+Google cloud
+
+# For development
 
 # How install dependencies
 Make sure redis and postgress is installed in the system
